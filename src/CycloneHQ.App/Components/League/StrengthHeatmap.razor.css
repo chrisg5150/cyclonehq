@@ -1,0 +1,18 @@
+.hm { padding: 12px 10px; overflow-x: auto; }
+.hm-grid { display: grid; grid-template-columns: minmax(112px, 2.2fr) repeat(var(--cols), minmax(30px, 1fr)) minmax(32px, .7fr); gap: 3px; align-items: center; min-width: 330px; }
+.hm-corner, .hm-col { color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; text-align: center; padding-bottom: 4px; }
+.hm-corner { text-align: left; }
+.hm-team { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; font-weight: 600; }
+.hm-team span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-team.me { color: var(--gold); font-weight: 800; }
+.hm-cell {
+  height: 34px; border-radius: 8px; display: grid; place-items: center; color: #fff; font-size: 13px;
+  background: hsl(var(--h) 62% 40%); text-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+}
+.hm-cell.me { outline: 2px solid var(--gold); outline-offset: -2px; }
+.hm-cell.empty { background: var(--panel-2); color: var(--muted); text-shadow: none; }
+.hm-tot { text-align: right; font-weight: 800; font-size: 13px; padding-right: 2px; }
+.hm-tot.me { color: var(--gold); }
+.hm-legend { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 11px; color: var(--muted); }
+.hm-ramp { flex: 1; height: 6px; border-radius: 99px; background: linear-gradient(90deg, hsl(145 62% 40%), hsl(72 62% 40%), hsl(0 62% 40%)); }
+.hm-note { font-size: 11px; margin: 8px 0 0; }

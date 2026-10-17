@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CycloneHQ.App/CycloneHQ.App.csproj" />
+    <Project Path="src/CycloneHQ.Core/CycloneHQ.Core.csproj" />
+    <Project Path="src/CycloneHQ.Sync/CycloneHQ.Sync.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CycloneHQ.Core.Tests/CycloneHQ.Core.Tests.csproj" />
+  </Folder>
+</Solution>

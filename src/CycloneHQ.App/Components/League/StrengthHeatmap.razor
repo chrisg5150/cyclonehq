@@ -1,0 +1,44 @@
+@* Every team's starters, position by position, colored by league rank (1 = best). From teams.json. *@
+@if (Data.Teams is not { Teams.Count: > 0 } profiles)
+{
+    <section class="panel"><p class="muted">Team strength appears after the next sync.</p></section>
+}
+else
+{
+    var cols = Positions.All.Where(p => profiles.Teams.Any(t => t.Positions.Any(s => s.Position == p))).ToList();
+    var n = profiles.Teams.Count;
+    var rows = profiles.Teams.OrderByDescending(t => t.ProjectedStarterPoints).ToList();
+    <section class="panel hm">
+        <div class="hm-grid" style="--cols:@cols.Count">
+            <span class="hm-corner">Team</span>
+            @foreach (var c in cols) { <span class="hm-col"><PosChip Pos="@c" /></span> }
+            <span class="hm-col hm-tot">Proj</span>
+
+            @foreach (var t in rows)
+            {
+                var f = Data.Franchise(t.FranchiseId);
+                var me = t.FranchiseId == Data.MyFranchiseId;
+                <span class="hm-team @(me ? "me" : "")"><Logo F="f" /><span>@(f?.Name ?? t.FranchiseId)</span></span>
+                @foreach (var c in cols)
+                {
+                    var s = t.Positions.FirstOrDefault(p => p.Position == c);
+                    if (s is null) { <span class="hm-cell empty">—</span> continue; }
+                    var tt = n <= 1 ? 0 : (s.LeagueRank - 1) / (double)(n - 1);
+                    var hue = (int)Math.Round(145 - 145 * tt);
+                    <span class="hm-cell @(me ? "me" : "")" style="--h:@hue" title="@c: @Fmt.Ordinal(s.LeagueRank) of @n (@Fmt.Signed(s.VsLeagueMedian) vs median)">
+                        <b class="num">@s.LeagueRank</b>
+                    </span>
+                }
+                <span class="hm-tot num @(me ? "me" : "")">@t.ProjectedStarterPoints.ToString("0")</span>
+            }
+        </div>
+        <div class="hm-legend">
+            <span>Best</span><span class="hm-ramp"></span><span>Worst</span>
+        </div>
+        <p class="muted hm-note">Numbers are each team's league rank at the position. Proj = projected starter points per week.</p>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public LeagueData Data { get; set; } = default!;
+}

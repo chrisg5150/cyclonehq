@@ -1,0 +1,28 @@
+@{ var insight = ShowVerdict ? Data.Insight(P.Id) : null; }
+<a class="prow" href="player/@P.Id">
+    <PosChip Pos="@P.Position" />
+    <Headshot Name="@P.Name" Pos="@P.Position" Url="@P.HeadshotUrl" />
+    <span class="prow-main">
+        <span class="prow-name">@P.Name</span>
+        <span class="prow-sub">
+            <TeamChip Team="@P.NflTeam" />
+            @if (P.Injury is { } inj) { <span class="inj">@inj.Status</span> }
+            @if (Note is not null) { <span class="muted">@Note</span> }
+            <FlagChips Flags="@P.Flags" Max="2" />
+        </span>
+    </span>
+    @if (ShowSpark) { <Sparkline Weekly="@P.Stats.Weekly" /> }
+    <span class="prow-num">
+        <b class="num">@Fmt.Pts(P.Stats.PointsPerGame)</b>
+        @if (insight is not null) { <span class="verdict-mini @Fmt.VerdictClass(insight.Verdict)">@insight.Verdict</span> }
+        else { <small>PPG</small> }
+    </span>
+</a>
+
+@code {
+    [Inject] LeagueData Data { get; set; } = default!;
+    [Parameter, EditorRequired] public Player P { get; set; } = default!;
+    [Parameter] public bool ShowSpark { get; set; } = true;
+    [Parameter] public bool ShowVerdict { get; set; } = true;
+    [Parameter] public string? Note { get; set; }
+}

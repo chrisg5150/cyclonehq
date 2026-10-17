@@ -1,0 +1,112 @@
+@* This week's league scoreboard from live.json. George's matchup comes first, expanded with both lineups. *@
+@if (Data.Live is not { Matchups.Count: > 0 } live)
+{
+    <section class="panel"><p class="muted">No matchups yet this week. They show up once lineups are set.</p></section>
+}
+else
+{
+    var mine = Data.MyMatchup;
+    <section class="lsb">
+        @if (mine is not null)
+        {
+            var mineHome = mine.Home.FranchiseId == Data.MyFranchiseId;
+            var me = mineHome ? mine.Home : mine.Away;
+            var opp = mineHome ? mine.Away : mine.Home;
+            var myProj = me.Projected ?? me.Score;
+            var oppProj = opp.Projected ?? opp.Score;
+            var share = myProj + oppProj > 0 ? myProj / (myProj + oppProj) * 100 : 50;
+            <article class="hero-mu @(IsLive(mine) ? "live" : "")">
+                <div class="hm-top">
+                    <span class="hm-label">Your matchup</span>
+                    @Status(mine)
+                </div>
+                <div class="hm-board">
+                    @Side(me, true)
+                    <span class="hm-vs">vs</span>
+                    @Side(opp, false)
+                </div>
+                <div class="hm-bar" title="Projected win share"><span style="width:@share.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)%"></span></div>
+                <div class="hm-proj"><span>Proj <b class="num">@Fmt.Pts(myProj)</b></span><span>@share.ToString("0")% to win</span><span>Proj <b class="num">@Fmt.Pts(oppProj)</b></span></div>
+                <div class="hm-lineups">
+                    @Lineup(me)
+                    @Lineup(opp)
+                </div>
+            </article>
+        }
+
+        <h2 class="lsb-title">Around the league <small>Week @live.Week</small></h2>
+        <div class="lsb-list">
+            @foreach (var m in live.Matchups.Where(m => !ReferenceEquals(m, mine)))
+            {
+                <article class="mini-mu">
+                    <div class="mm-row @(m.Away.Score >= m.Home.Score ? "lead" : "")">@Name(m.Away)<b class="num">@Fmt.Pts(m.Away.Score)</b></div>
+                    <div class="mm-row @(m.Home.Score >= m.Away.Score ? "lead" : "")">@Name(m.Home)<b class="num">@Fmt.Pts(m.Home.Score)</b></div>
+                    <div class="mm-foot">@Status(m)<span class="muted">@(m.Away.PlayersYetToPlay + m.Home.PlayersYetToPlay) yet to play</span></div>
+                </article>
+            }
+        </div>
+        <p class="updated">Updated @Fmt.Ago(live.UpdatedUtc) · new data about every 10 min on game days</p>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public LeagueData Data { get; set; } = default!;
+
+    static bool IsLive(LiveMatchup m) =>
+        m.Home.Players.Concat(m.Away.Players).Any(p => p.IsStarter && p.GameSecondsRemaining is > 0 and < 3600);
+
+    static bool IsDone(LiveMatchup m) =>
+        m.Home.PlayersYetToPlay == 0 && m.Away.PlayersYetToPlay == 0 && m.Home.GameSecondsRemaining <= 0 && m.Away.GameSecondsRemaining <= 0;
+
+    RenderFragment Status(LiveMatchup m) => __builder =>
+    {
+        if (IsLive(m)) { <span class="live-pill">Live</span> }
+        else if (IsDone(m)) { <span class="final-pill">Final</span> }
+    };
+
+    RenderFragment Name(LiveSide s) => __builder =>
+    {
+        var f = Data.Franchise(s.FranchiseId);
+        <span class="mm-team @(s.FranchiseId == Data.MyFranchiseId ? "me" : "")">
+            <Logo F="f" />
+            <span class="mm-name">@(f?.Name ?? s.FranchiseId)</span>
+            @if (f is not null) { <small class="num">@f.Wins-@f.Losses</small> }
+        </span>
+    };
+
+    RenderFragment Side(LiveSide s, bool mine) => __builder =>
+    {
+        var f = Data.Franchise(s.FranchiseId);
+        <div class="hm-side @(mine ? "mine" : "")">
+            <Logo F="f" Large="true" />
+            <span class="hm-team">@(f?.Name ?? "Opponent")</span>
+            <span class="hm-score num">@Fmt.Pts(s.Score)</span>
+            <span class="hm-ytp">@s.PlayersYetToPlay to play</span>
+        </div>
+    };
+
+    RenderFragment Lineup(LiveSide s) => __builder =>
+    {
+        var rows = s.Players.Where(p => p.IsStarter)
+            .Select(lp => (lp, p: Data.Player(lp.PlayerId)))
+            .OrderBy(x => x.p is null ? 99 : Array.IndexOf(Positions.All, x.p.Position) is var i && i >= 0 ? i : 9)
+            .ToList();
+        <ol class="hm-lineup">
+            @foreach (var (lp, p) in rows)
+            {
+                var state = lp.GameSecondsRemaining <= 0 ? "done" : lp.GameSecondsRemaining < 3600 ? "playing" : "todo";
+                <li class="@state">
+                    @if (p is not null)
+                    {
+                        <a href="player/@p.Id"><PosChip Pos="@p.Position" /><span class="hl-name">@Fmt.ShortName(p.Name)</span></a>
+                    }
+                    else
+                    {
+                        <span class="hl-name muted">Player @lp.PlayerId</span>
+                    }
+                    <b class="num">@Fmt.Pts(lp.Score)</b>
+                </li>
+            }
+        </ol>
+    };
+}

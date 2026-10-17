@@ -1,0 +1,33 @@
+@inherits DataPage
+@* Shows a skeleton while loading, an error with Retry, or a note for pasted leagues; otherwise the page. *@
+@if (Data.IsManualLeague)
+{
+    <div class="panel empty">
+        <h2>Pasted league</h2>
+        <p>Rankings, flags and trade ideas need a synced league. Your pasted roster lives on the League tab.</p>
+        <a class="btn" href="league">Open League</a>
+        <a class="btn btn-ghost" href="leagues">Switch league</a>
+    </div>
+}
+else if (Data.League is not null && Data.Pool is not null)
+{
+    @ChildContent
+}
+else if (Data.Error is not null && !Data.IsLoading)
+{
+    <div class="panel empty">
+        <h2>Can't load your team</h2>
+        <p>@Data.Error</p>
+        <button class="btn" @onclick="Data.RetryAsync">Try again</button>
+    </div>
+}
+else
+{
+    <div class="skeleton tall"></div>
+    <div class="skeleton"></div>
+    <div class="skeleton"></div>
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

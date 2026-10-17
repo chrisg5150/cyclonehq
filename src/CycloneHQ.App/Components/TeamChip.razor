@@ -1,0 +1,6 @@
+@{ var (bg, fg) = NflTeams.Color(Team); }
+<span class="team-chip" style="--tc-bg:@bg;--tc-fg:@fg">@NflTeams.Code(Team)</span>
+
+@code {
+    [Parameter] public string? Team { get; set; }
+}

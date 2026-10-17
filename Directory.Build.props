@@ -1,0 +1,12 @@
+<Project>
+  <!-- While this folder lives in OneDrive, build output goes to %LOCALAPPDATA%\CycloneHQ\artifacts
+       so bin/obj files don't churn OneDrive sync. Anywhere else (George's machine, GitHub Actions)
+       the normal per-project bin/ and obj/ are used. -->
+  <PropertyGroup Condition="'$(LOCALAPPDATA)' != '' and $(MSBuildThisFileDirectory.Contains('OneDrive'))">
+    <ArtifactsPath>$(LOCALAPPDATA)\CycloneHQ\artifacts</ArtifactsPath>
+  </PropertyGroup>
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+</Project>

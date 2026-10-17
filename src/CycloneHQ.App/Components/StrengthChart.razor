@@ -1,0 +1,30 @@
+@* Each position's starters vs. the league median: a diverging bar, plus the league rank. *@
+@if (Positions is { Count: > 0 })
+{
+    var rows = Positions.OrderBy(p => Array.IndexOf(Core.Models.Positions.All, p.Position) is var i && i < 0 ? 99 : i).ToList();
+    var span = Math.Max(1, rows.Max(p => Math.Abs(p.VsLeagueMedian)));
+    <div class="strength" role="list">
+        @foreach (var p in rows)
+        {
+            var pct = Math.Abs(p.VsLeagueMedian) / span * 50;
+            var good = p.VsLeagueMedian >= 0;
+            var tier = p.LeagueRank <= Teams / 3 ? "top" : p.LeagueRank > Teams * 2 / 3 ? "low" : "mid";
+            <div class="str-row" role="listitem">
+                <PosChip Pos="@p.Position" />
+                <div class="str-track">
+                    <span class="str-mid"></span>
+                    <span class="str-bar @(good ? "pos-bar" : "neg-bar")"
+                          style="@(good ? $"left:50%;width:{pct:0.#}%" : $"right:50%;width:{pct:0.#}%")"></span>
+                </div>
+                <span class="str-val num @(good ? "up" : "down")">@Fmt.Signed(p.VsLeagueMedian)</span>
+                <span class="str-rank rank-@tier"><b class="num">@p.LeagueRank</b><small>/@Teams</small></span>
+            </div>
+        }
+        <div class="str-scale"><span>Weaker</span><span>League median</span><span>Stronger</span></div>
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<PositionStrength>? Positions { get; set; }
+    [Parameter] public int Teams { get; set; } = 12;
+}

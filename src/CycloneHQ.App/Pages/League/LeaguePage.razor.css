@@ -1,0 +1,12 @@
+.seg {
+  position: sticky; top: calc(64px + env(safe-area-inset-top)); z-index: 5; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+  margin: 16px 0 4px; padding: 4px; border-radius: 14px; background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 1px solid var(--line); backdrop-filter: blur(12px);
+}
+.seg-btn {
+  min-height: 40px; border: 0; border-radius: 10px; background: transparent; color: var(--muted);
+  font: 700 13px var(--body); letter-spacing: .02em; cursor: pointer; transition: background .15s, color .15s;
+}
+.seg-btn.on { background: var(--brand-grad); color: #1a0d05; box-shadow: 0 4px 14px rgba(236, 127, 63, .3); }
+
+h1:focus { outline: none; }

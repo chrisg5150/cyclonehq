@@ -1,0 +1,59 @@
+﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject LeagueData Data
+
+<div class="shell">
+    <header class="appbar">
+        <a class="brand" href="" aria-label="CycloneHQ home">
+            <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+                <defs>
+                    <linearGradient id="bm" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0" stop-color="#F1BE48" /><stop offset="1" stop-color="#E0483E" />
+                    </linearGradient>
+                </defs>
+                <path d="M8 16h48M14 27h36M20 38h24M26 49h12" stroke="url(#bm)" stroke-width="7" stroke-linecap="round" fill="none" />
+            </svg>
+            <span class="brand-word">Cyclone<b>HQ</b></span>
+        </a>
+        <a class="league-switch" href="leagues" title="Switch league">
+            <span class="ls-dot @(Data.IsManualLeague ? "manual" : "")"></span>
+            <span class="ls-name" title="@Data.LeagueName">@Data.LeagueShortName</span>
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </a>
+    </header>
+
+    <main class="page">
+        @Body
+    </main>
+
+    <nav class="tabbar" aria-label="Main">
+        <NavLink class="tab" href="" Match="NavLinkMatch.All">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" /></svg>
+            <span>Home</span>
+        </NavLink>
+        <NavLink class="tab" href="team">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4l-5 3 2 5 2-1v9h10v-9l2 1 2-5-5-3c-.5 1.8-2 3-4 3s-3.5-1.2-4-3z" /></svg>
+            <span>Team</span>
+        </NavLink>
+        <NavLink class="tab" href="league">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v4a5 5 0 0 1-10 0zM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M12 13v4M8 20h8M10 17h4" /></svg>
+            <span>League</span>
+        </NavLink>
+        <NavLink class="tab" href="nfl">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="9.5" ry="5.5" transform="rotate(-40 12 12)" /><path d="M9 15l6-6M10.5 10.5l3 3M12 9l3 3M9 12l3 3" /></svg>
+            <span>NFL</span>
+        </NavLink>
+    </nav>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        Data.Changed += OnChanged;
+        await Data.EnsureLoadedAsync();
+    }
+
+    void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Data.Changed -= OnChanged;
+}

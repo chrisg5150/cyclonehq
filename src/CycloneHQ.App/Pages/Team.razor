@@ -1,0 +1,55 @@
+@page "/team"
+@inherits DataPage
+
+<PageTitle>My Team · CycloneHQ</PageTitle>
+
+<LoadState>
+    @{
+        var me = Data.MyFranchise;
+        var roster = Data.MyRoster.ToList();
+        var mySide = Data.MyMatchup is { } m ? (m.Home.FranchiseId == Data.MyFranchiseId ? m.Home : m.Away) : null;
+        var liveById = mySide?.Players.ToDictionary(p => p.PlayerId) ?? new();
+        // Starters: the lineup in this week's matchup if there is one, else the analyzer's best lineup.
+        var starterIds = mySide is not null
+            ? mySide.Players.Where(p => p.IsStarter).Select(p => p.PlayerId).ToHashSet()
+            : (Data.MyProfile?.OptimalStarterIds ?? []).ToHashSet();
+        int Order(Player p) => Array.IndexOf(Positions.All, p.Position) is var i && i >= 0 ? i : 9;
+        var starters = roster.Where(p => starterIds.Contains(p.Id)).OrderBy(Order).ThenByDescending(p => p.Stats.PointsPerGame).ToList();
+        var bench = roster.Where(p => !starterIds.Contains(p.Id)).OrderBy(Order).ThenByDescending(p => p.Stats.PointsPerGame).ToList();
+        string? Note(Player p) => liveById.TryGetValue(p.Id, out var lp) && (lp.Score > 0 || lp.GameSecondsRemaining < 3600)
+            ? $"{Fmt.Pts(lp.Score)} this wk" : null;
+    }
+    <section class="hero hero-compact">
+        <div class="kicker">@Data.LeagueName</div>
+        <h1 class="display">@(me?.Name ?? "My team")</h1>
+        @if (me is not null)
+        {
+            <div class="hero-stats">
+                <div><b class="num">@me.Wins-@me.Losses@(me.Ties > 0 ? $"-{me.Ties}" : "")</b><small>Record</small></div>
+                <div><b class="num">@me.PointsFor.ToString("0")</b><small>Points for</small></div>
+                <div><b class="num">@roster.Count(p => p.Flags.Count > 0)</b><small>Flagged</small></div>
+            </div>
+        }
+    </section>
+
+    <section class="panel">
+        <div class="panel-head">
+            <h2>Starters</h2>
+            <span class="muted">@(mySide is not null ? $"Week {Data.Live!.Week} lineup" : "Best lineup")</span>
+        </div>
+        <div class="plist">
+            @foreach (var p in starters) { <PlayerRow P="@p" Note="@Note(p)" /> }
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="panel-head">
+            <h2>Bench</h2>
+            <span class="count num">@bench.Count</span>
+        </div>
+        <div class="plist">
+            @foreach (var p in bench) { <PlayerRow P="@p" Note="@Note(p)" /> }
+        </div>
+    </section>
+    <p class="updated">Lines show weekly fantasy points · PPG is points per game</p>
+</LoadState>

@@ -1,0 +1,79 @@
+@page "/league"
+@inherits DataPage
+@inject LeagueExtras Extras
+
+<PageTitle>League · CycloneHQ</PageTitle>
+
+@if (Data.IsManualLeague)
+{
+    <ManualLeagueView LeagueKey="@Data.Key" />
+}
+else
+{
+    <LoadState>
+        @{
+            var league = Data.League!;
+            var me = Data.MyFranchise;
+        }
+        <section class="hero hero-compact">
+            <div class="kicker">@league.Season · Week @(Data.Live?.Week ?? league.CurrentWeek)</div>
+            <h1 class="display">@league.Name</h1>
+            @if (me is not null)
+            {
+                <div class="hero-stats">
+                    <div><b class="num">@Fmt.Ordinal(me.StandingRank)</b><small>Standing</small></div>
+                    <div><b class="num">@me.Wins-@me.Losses@(me.Ties > 0 ? $"-{me.Ties}" : "")</b><small>Record</small></div>
+                    <div><b class="num">@me.PointsFor.ToString("0")</b><small>Points for</small></div>
+                </div>
+            }
+        </section>
+
+        <div class="seg" role="tablist">
+            @foreach (var (id, label) in Tabs)
+            {
+                <button role="tab" aria-selected="@(tab == id)" class="seg-btn @(tab == id ? "on" : "")" @onclick="() => tab = id">@label</button>
+            }
+        </div>
+
+        @switch (tab)
+        {
+            case "scores":
+                <LeagueScoreboard Data="Data" />
+                break;
+            case "standings":
+                <StandingsTable Data="Data" />
+                break;
+            case "strength":
+                <StrengthHeatmap Data="Data" />
+                break;
+            case "moves":
+                <TransactionFeed Data="Data" Log="transactions" Loading="transactionsLoading" Directory="directory" />
+                break;
+        }
+    </LoadState>
+}
+
+@code {
+    static readonly (string Id, string Label)[] Tabs =
+        [("scores", "Scores"), ("standings", "Standings"), ("strength", "Strength"), ("moves", "Moves")];
+
+    string tab = "scores";
+    TransactionLog? transactions;
+    Dictionary<string, DirectoryEntry>? directory;
+    bool transactionsLoading = true;
+    string? transactionsKey;
+
+    // Transactions aren't part of LeagueData, so load them here (again if the league is switched).
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Data.IsManualLeague || transactionsKey == Data.Key) return;
+        var key = transactionsKey = Data.Key;
+        transactionsLoading = true;
+        var log = await Extras.TransactionsAsync(key);
+        directory ??= (await Extras.DirectoryAsync())?.Players.GroupBy(p => p.Id).ToDictionary(g => g.Key, g => g.First());
+        if (key != Data.Key) return;
+        transactions = log;
+        transactionsLoading = false;
+        StateHasChanged();
+    }
+}

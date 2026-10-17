@@ -1,0 +1,226 @@
+@page "/nfl"
+@inherits DataPage
+@inject EspnScoreboard Espn
+@inject LeagueExtras Extras
+@inject ManualLeagues Manual
+
+<PageTitle>NFL · CycloneHQ</PageTitle>
+
+<section class="hero hero-compact">
+    <div class="kicker">
+        @if (board?.Week is { } w) { <span>Week @w.Number</span> }
+        @if (liveCount > 0) { <span class="live-pill">@liveCount live</span> }
+    </div>
+    <h1 class="display">NFL Scoreboard</h1>
+    <div class="nfl-tools">
+        <button class="chip-toggle @(mineOnly ? "on" : "")" @onclick="() => mineOnly = !mineOnly" aria-pressed="@mineOnly">
+            ★ My players' games
+        </button>
+        <span class="muted nfl-upd">
+            @if (lastUpdated is { } u) { <span>Updated @u.ToLocalTime().ToString("h:mm:ss tt")@(liveCount > 0 ? " · every 30s" : "")</span> }
+            <button class="link" @onclick="RefreshNow" disabled="@refreshing">@(refreshing ? "Refreshing…" : "Refresh")</button>
+        </span>
+    </div>
+</section>
+
+@if (board is null)
+{
+    @if (error is not null)
+    {
+        <section class="panel empty">
+            <h2>Can't reach ESPN</h2>
+            <p>@error</p>
+            <button class="btn" @onclick="RefreshNow">Try again</button>
+        </section>
+    }
+    else
+    {
+        <div class="skeleton tall"></div>
+        <div class="skeleton tall"></div>
+    }
+}
+else
+{
+    var games = board.Events.Where(e => e.Competitions.Count > 0)
+        .Where(e => !mineOnly || Mine(e).Count > 0).ToList();
+    var live = games.Where(e => e.Game.IsLive).OrderBy(e => e.Kickoff).ToList();
+    var upcoming = games.Where(e => e.Game.IsPre).OrderBy(e => e.Kickoff).ToList();
+    var final = games.Where(e => e.Game.IsFinal).OrderByDescending(e => e.Kickoff).ToList();
+
+    @if (games.Count == 0)
+    {
+        <section class="panel"><p class="muted">@(mineOnly ? "None of your players play in this week's remaining games." : "No games this week.")</p></section>
+    }
+    @if (live.Count > 0)
+    {
+        <h2 class="nfl-h"><span class="dot-live"></span>Live now</h2>
+        <div class="games">@foreach (var g in live) { @Game(g) }</div>
+    }
+    @foreach (var day in upcoming.GroupBy(e => e.Kickoff.ToLocalTime().Date))
+    {
+        <h2 class="nfl-h">@day.Key.ToString("dddd, MMM d")</h2>
+        <div class="games">@foreach (var g in day) { @Game(g) }</div>
+    }
+    @if (final.Count > 0)
+    {
+        <h2 class="nfl-h">Final</h2>
+        <div class="games">@foreach (var g in final) { @Game(g) }</div>
+    }
+    @if (board.Week?.TeamsOnBye is { Count: > 0 } byes)
+    {
+        <p class="byes">
+            <span class="muted">On bye:</span>
+            @foreach (var t in byes)
+            {
+                var mine = rosterByTeam.TryGetValue(NflTeams.Code(t.Abbreviation), out var names) ? names : null;
+                <span class="bye @(mine is not null ? "mine" : "")" title="@(mine is not null ? string.Join(", ", mine) : "")">
+                    @if (!string.IsNullOrEmpty(t.Logo)) { <img src="@t.Logo" alt="" loading="lazy" /> }
+                    @t.Abbreviation@(mine is not null ? $" ★{mine.Count}" : "")
+                </span>
+            }
+        </p>
+    }
+    <p class="updated">Scores from ESPN · ★ = a player on your @(Data.IsManualLeague ? "pasted roster" : "team")</p>
+}
+
+@code {
+    EspnBoard? board;
+    string? error;
+    DateTimeOffset? lastUpdated;
+    bool refreshing;
+    bool mineOnly;
+    int liveCount;
+    CancellationTokenSource cts = new();
+    Dictionary<string, List<string>> rosterByTeam = new();
+    string? rosterKey;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _ = PollAsync(cts.Token);
+        await base.OnInitializedAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Rebuild George's team map whenever the league data or the selected league changes.
+        var key = $"{Data.Key}|{Data.Pool?.UpdatedUtc}";
+        if (key == rosterKey) return;
+        rosterKey = key;
+        rosterByTeam = await BuildRosterMapAsync();
+        StateHasChanged();
+    }
+
+    async Task<Dictionary<string, List<string>>> BuildRosterMapAsync()
+    {
+        IEnumerable<(string Name, string Team, string Pos)> players;
+        if (Data.IsManualLeague)
+        {
+            var league = await Manual.GetAsync(Data.Key);
+            var dir = await Extras.DirectoryAsync();
+            var ids = league?.Roster.Select(s => s.PlayerId).OfType<string>().ToHashSet() ?? [];
+            players = dir?.Players.Where(p => ids.Contains(p.Id)).Select(p => (p.Name, p.NflTeam, p.Position)) ?? [];
+        }
+        else
+        {
+            var owner = Data.MyFranchiseId ?? "0006";
+            players = Data.Pool?.Players.Where(p => p.FantasyOwnerId == owner).Select(p => (p.Name, p.NflTeam, p.Position)) ?? [];
+        }
+        return players.GroupBy(p => NflTeams.Code(p.Team))
+            .ToDictionary(g => g.Key, g => g.Select(p => RosterMatcher.IsDefense(p.Pos) ? $"{g.Key} D/ST" : Fmt.ShortName(p.Name)).ToList());
+    }
+
+    List<string> Mine(EspnEvent e) =>
+        e.Game.Competitors.SelectMany(c => rosterByTeam.TryGetValue(NflTeams.Code(c.Team.Abbreviation), out var n) ? n : []).ToList();
+
+    async Task PollAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            await LoadAsync(ct);
+            var soon = board?.Events.Any(e => e.Competitions.Count > 0 && e.Game.IsPre && e.Kickoff - DateTimeOffset.UtcNow < TimeSpan.FromMinutes(15)) ?? false;
+            var delay = liveCount > 0 ? TimeSpan.FromSeconds(30) : soon ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(5);
+            try { await Task.Delay(delay, ct); } catch (OperationCanceledException) { return; }
+        }
+    }
+
+    async Task LoadAsync(CancellationToken ct)
+    {
+        try
+        {
+            refreshing = true;
+            var b = await Espn.LoadAsync(ct);
+            board = b;
+            liveCount = b.Events.Count(e => e.Competitions.Count > 0 && e.Game.IsLive);
+            lastUpdated = DateTimeOffset.Now;
+            error = null;
+        }
+        catch (OperationCanceledException) { return; }
+        catch (Exception ex)
+        {
+            error = "Check your connection. Scores will retry automatically.";
+            Console.WriteLine($"ESPN scoreboard: {ex.Message}");
+        }
+        finally { refreshing = false; }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    Task RefreshNow() => LoadAsync(cts.Token);
+
+    RenderFragment Game(EspnEvent e) => __builder =>
+    {
+        var g = e.Game;
+        var mine = Mine(e);
+        var possession = g.IsLive ? g.Situation?.Possession : null;
+        <article class="game @(g.IsLive ? "live" : g.IsFinal ? "final" : "pre") @(mine.Count > 0 ? "mine" : "") @(g.Situation?.IsRedZone == true && g.IsLive ? "redzone" : "")">
+            <div class="g-status">
+                @if (g.IsLive) { <span class="live-pill">@(g.Status.Type.ShortDetail ?? $"Q{g.Status.Period} {g.Status.DisplayClock}")</span> }
+                else if (g.IsFinal) { <span class="final-pill">@(g.Status.Type.ShortDetail ?? "Final")</span> }
+                else { <span class="g-time">@e.Kickoff.ToLocalTime().ToString("h:mm tt")</span> }
+                @if (!string.IsNullOrEmpty(g.Tv)) { <span class="g-tv">@g.Tv</span> }
+            </div>
+            @Row(g.Away, g, possession)
+            @Row(g.Home, g, possession)
+            <div class="g-foot">
+                @if (g.IsLive && !string.IsNullOrEmpty(g.Situation?.DownDistanceText))
+                {
+                    <span class="g-dd">@g.Situation.DownDistanceText</span>
+                }
+                else if (!string.IsNullOrEmpty(g.Spread) || g.OverUnder is not null)
+                {
+                    <span class="g-line">
+                        @if (!string.IsNullOrEmpty(g.Spread)) { <span>@g.Spread</span> }
+                        @if (g.OverUnder is { } ou) { <span>O/U @ou.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)</span> }
+                    </span>
+                }
+                else if (g.Venue?.FullName is { } v) { <span class="muted">@v</span> }
+            </div>
+            @if (mine.Count > 0)
+            {
+                <div class="g-mine"><span class="star">★</span>@string.Join(" · ", mine)</div>
+            }
+        </article>
+    };
+
+    RenderFragment Row(EspnCompetitor c, EspnCompetition g, string? possession) => __builder =>
+    {
+        var other = c.HomeAway == "home" ? g.Away : g.Home;
+        var leads = !g.IsPre && c.Points > other.Points;
+        var lost = g.IsFinal && c.Points < other.Points;
+        <div class="g-row @(leads ? "lead" : "") @(lost ? "lost" : "")">
+            @if (!string.IsNullOrEmpty(c.Team.Logo)) { <img class="g-logo" src="@c.Team.Logo" alt="" loading="lazy" /> }
+            else { <TeamChip Team="@c.Team.Abbreviation" /> }
+            <span class="g-abbr">@c.Team.Abbreviation</span>
+            <span class="g-name">@c.Team.ShortDisplayName</span>
+            <span class="g-rec">@c.Record</span>
+            @if (possession == c.Team.Id) { <span class="g-ball" title="Has the ball">🏈</span> }
+            @if (!g.IsPre) { <b class="g-score num">@c.Score</b> }
+        </div>
+    };
+
+    public override void Dispose()
+    {
+        cts.Cancel();
+        cts.Dispose();
+        base.Dispose();
+    }
+}

@@ -1,0 +1,14 @@
+{
+  // MyFantasyLeague leagues to sync. To add one, copy the entry and change the values.
+  // "host" is the wwwNN server in the league's URL; "myFranchiseId" is your team's 4-digit id
+  // (it's in the URL when you open your roster, e.g. ...&F=0006).
+  "leagues": [
+    {
+      "platform": "mfl",
+      "leagueId": "24623",
+      "season": 2026,
+      "host": "https://www44.myfantasyleague.com",
+      "myFranchiseId": "0006"
+    }
+  ]
+}

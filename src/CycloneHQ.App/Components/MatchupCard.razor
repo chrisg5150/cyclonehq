@@ -1,0 +1,72 @@
+@inherits DataPage
+@* George's head-to-head matchup this week, from live.json (polled every minute). *@
+@if (Data.MyMatchup is { } m)
+{
+    var mineHome = m.Home.FranchiseId == Data.MyFranchiseId;
+    var me = mineHome ? m.Home : m.Away;
+    var opp = mineHome ? m.Away : m.Home;
+    var live = m.Home.Players.Concat(m.Away.Players).Any(p => p.GameSecondsRemaining is > 0 and < 3600);
+    var done = me.PlayersYetToPlay == 0 && opp.PlayersYetToPlay == 0 && me.GameSecondsRemaining <= 0 && opp.GameSecondsRemaining <= 0;
+    var myProj = me.Projected ?? me.Score;
+    var oppProj = opp.Projected ?? opp.Score;
+    var share = myProj + oppProj > 0 ? myProj / (myProj + oppProj) * 100 : 50;
+    var top = me.Players.Where(p => p.IsStarter).OrderByDescending(p => p.Score).Take(3).ToList();
+    <section class="matchup @(live ? "is-live" : "")">
+        <div class="mu-head">
+            <span class="mu-label">Week @Data.Live!.Week matchup</span>
+            @if (live) { <span class="live-pill">Live</span> }
+            else if (done) { <span class="final-pill">Final</span> }
+        </div>
+        <div class="mu-board">
+            @Side(me, true)
+            <div class="mu-vs">vs</div>
+            @Side(opp, false)
+        </div>
+        @if (me.Projected is not null || opp.Projected is not null)
+        {
+            <div class="mu-proj">
+                <div class="mu-bar"><span style="width:@share.ToString("0.#")%"></span></div>
+                <div class="mu-proj-labels">
+                    <span>Proj <b class="num">@Fmt.Pts(myProj)</b></span>
+                    <span>@(share >= 50 ? "Favored" : "Underdog") · @share.ToString("0")%</span>
+                    <span>Proj <b class="num">@Fmt.Pts(oppProj)</b></span>
+                </div>
+            </div>
+        }
+        @if (top.Count > 0 && top[0].Score > 0)
+        {
+            <div class="mu-top">
+                @foreach (var lp in top)
+                {
+                    var p = Data.Player(lp.PlayerId);
+                    if (p is null) continue;
+                    <a href="player/@p.Id" class="mu-top-item">
+                        <PosChip Pos="@p.Position" /><span>@Fmt.ShortName(p.Name)</span><b class="num">@Fmt.Pts(lp.Score)</b>
+                    </a>
+                }
+            </div>
+        }
+        @* live.json only changes when GitHub Actions redeploys; the app checks for it every minute. *@
+        <div class="mu-foot">Updated @Fmt.Ago(Data.Live.UpdatedUtc) · new data about every 10 min on game days</div>
+    </section>
+}
+else if (Data.League is not null)
+{
+    <section class="matchup">
+        <div class="mu-head"><span class="mu-label">This week</span></div>
+        <p class="muted">No live matchup yet. It appears once the week's lineups are set.</p>
+    </section>
+}
+
+@code {
+    RenderFragment Side(LiveSide s, bool mine) => __builder =>
+    {
+        var f = Data.Franchise(s.FranchiseId);
+        <div class="mu-side @(mine ? "mine" : "")">
+            <span class="mu-team">@(f?.Name ?? "Opponent")</span>
+            @if (f is not null) { <span class="mu-rec num">@f.Wins-@f.Losses</span> }
+            <span class="mu-score num">@Fmt.Pts(s.Score)</span>
+            <span class="mu-ytp">@s.PlayersYetToPlay yet to play</span>
+        </div>
+    };
+}

@@ -1,0 +1,187 @@
+@page "/player/{Id}"
+@inherits DataPage
+
+<PageTitle>@(P?.Name ?? "Player") · CycloneHQ</PageTitle>
+
+<LoadState>
+    @if (P is null)
+    {
+        <div class="panel empty">
+            <h2>Player not found</h2>
+            <p>This player isn't in the synced player pool.</p>
+            <a class="btn" href="team">Back to My Team</a>
+        </div>
+    }
+    else
+    {
+        var p = P;
+        var insight = Data.Insight(p.Id);
+        var owner = Data.Franchise(p.FantasyOwnerId);
+        var mine = p.FantasyOwnerId is not null && p.FantasyOwnerId == Data.MyFranchiseId;
+        var trend = p.Stats.Last3PointsPerGame - p.Stats.PointsPerGame;
+        var u = p.Usage;
+
+        <button class="back" @onclick="Back">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            Back
+        </button>
+
+        <section class="player-hero" style="--pc:var(--pos-@p.Position.ToLowerInvariant());--tc:@NflTeams.Color(p.NflTeam).Bg">
+            <Headshot Name="@p.Name" Pos="@p.Position" Url="@p.HeadshotUrl" Large="true" />
+            <div class="ph-main">
+                <div class="ph-tags">
+                    <PosChip Pos="@p.Position" Large="true" />
+                    <TeamChip Team="@p.NflTeam" />
+                    @if (p.ByeWeek is { } bye) { <span class="muted">Bye @bye</span> }
+                </div>
+                <h1 class="display ph-name">@p.Name</h1>
+                <div class="ph-owner">
+                    @(mine ? "On your team" : owner is not null ? $"Owned by {owner.Name}" : "Free agent")
+                    @if (p.Age is { } age) { <span> · Age @age</span> }
+                </div>
+                @if (p.Injury is { } inj)
+                {
+                    <div class="inj-banner"><b>@inj.Status</b> @inj.Details</div>
+                }
+                <FlagChips Flags="@p.Flags" Max="5" />
+            </div>
+        </section>
+
+        <section class="tiles">
+            <div class="tile">
+                <small>League rank</small>
+                <b class="num">@Fmt.Rank(p.Rank.PositionRankLeague, p.Position)</b>
+                <span>by PPG here</span>
+            </div>
+            <div class="tile">
+                <small>Consensus</small>
+                <b class="num">@Fmt.Rank(p.Rank.ConsensusPositionRank, p.Position)</b>
+                <span>rest of season</span>
+            </div>
+            <div class="tile">
+                <small>Trade value</small>
+                <b class="num">@p.Rank.TradeValue.ToString("0")</b>
+                <span class="meter"><i style="width:@Math.Clamp(p.Rank.TradeValue, 0, 100).ToString("0")%"></i></span>
+            </div>
+            <div class="tile">
+                <small>Trend</small>
+                <b class="num @(trend >= 0.5 ? "up" : trend <= -0.5 ? "down" : "")">@(trend >= 0.5 ? "▲" : trend <= -0.5 ? "▼" : "▶") @Fmt.Signed(trend)</b>
+                <span>last 3 vs season</span>
+            </div>
+        </section>
+
+        <section class="panel" style="--pc:var(--pos-@p.Position.ToLowerInvariant())">
+            <div class="panel-head">
+                <h2>Weekly points</h2>
+                <span class="muted"><b class="num">@Fmt.Pts(p.Stats.PointsPerGame)</b> PPG · @p.Stats.GamesPlayed G</span>
+            </div>
+            <WeeklyChart Weekly="@p.Stats.Weekly" />
+            @if (p.Stats.ProjectedNextWeek is { } proj)
+            {
+                <p class="muted small">Projected next week: <b class="num">@Fmt.Pts(proj)</b></p>
+            }
+        </section>
+
+        @if (u is not null)
+        {
+            <section class="panel">
+                <div class="panel-head"><h2>Usage</h2><span class="muted">@u.Source</span></div>
+                <div class="usage">
+                    @if (u.SnapPct is not null) { <div><b class="num">@Fmt.Pct(u.SnapPct)</b><small>Snaps</small></div> }
+                    @if (u.TargetShare is not null) { <div><b class="num">@Fmt.Pct(u.TargetShare)</b><small>Target share</small></div> }
+                    @if (u.RushShare is not null) { <div><b class="num">@Fmt.Pct(u.RushShare)</b><small>Rush share</small></div> }
+                    @if (u.RedZoneTouches is not null) { <div><b class="num">@u.RedZoneTouches</b><small>Red-zone touches</small></div> }
+                    @if (u.ExpectedPointsPerGame is not null) { <div><b class="num">@Fmt.Pts(u.ExpectedPointsPerGame.Value)</b><small>Expected PPG</small></div> }
+                    @if (u.PointsOverExpectedPerGame is { } poe) { <div><b class="num @(poe >= 0 ? "up" : "down")">@Fmt.Signed(poe)</b><small>Over expected</small></div> }
+                </div>
+            </section>
+        }
+
+        @if (insight is not null)
+        {
+            <section class="verdict @Fmt.VerdictClass(insight.Verdict)">
+                <div class="verdict-tag">Verdict</div>
+                <div class="verdict-word display">@insight.Verdict</div>
+                <p>@insight.Summary</p>
+                @if (insight.Reasons.Count > 0)
+                {
+                    <ul>@foreach (var r in insight.Reasons) { <li>@r</li> }</ul>
+                }
+            </section>
+
+            @if (insight.TradeIdeas.Count > 0)
+            {
+                <section class="panel">
+                    <div class="panel-head"><h2>Trade targets</h2><span class="muted">Best fit first</span></div>
+                    <ol class="trades">
+                        @foreach (var (t, i) in insight.TradeIdeas.Select((t, i) => (t, i)))
+                        {
+                            var partner = Data.Franchise(t.PartnerFranchiseId);
+                            var scale = Math.Max(1, Math.Max(t.ValueGive, t.ValueGet));
+                            <li class="trade">
+                                <div class="trade-head">
+                                    <span class="trade-rank num">@(i + 1)</span>
+                                    <span class="trade-partner">@(partner?.Name ?? "Team " + t.PartnerFranchiseId)</span>
+                                    <span class="fit"><b class="num">@t.FitScore.ToString("0")</b><small>fit</small></span>
+                                </div>
+                                <div class="trade-sides">
+                                    <div>
+                                        <small class="give">You give</small>
+                                        @foreach (var id in t.Give) { @TradePlayer(id) }
+                                    </div>
+                                    <div>
+                                        <small class="get">You get</small>
+                                        @foreach (var id in t.Get) { @TradePlayer(id) }
+                                    </div>
+                                </div>
+                                <div class="vbars">
+                                    <div class="vbar"><span>Give</span><i class="give" style="width:@((t.ValueGive / scale * 100).ToString("0"))%"></i><b class="num">@t.ValueGive.ToString("0")</b></div>
+                                    <div class="vbar"><span>Get</span><i class="get" style="width:@((t.ValueGet / scale * 100).ToString("0"))%"></i><b class="num">@t.ValueGet.ToString("0")</b></div>
+                                </div>
+                                <div class="trade-gains">
+                                    <span>You <b class="num @(t.MyLineupGainPpg >= 0 ? "up" : "down")">@Fmt.Signed(t.MyLineupGainPpg) PPG</b></span>
+                                    <span>Them <b class="num @(t.PartnerLineupGainPpg >= 0 ? "up" : "down")">@Fmt.Signed(t.PartnerLineupGainPpg) PPG</b></span>
+                                </div>
+                                <p class="trade-why">@t.Rationale</p>
+                            </li>
+                        }
+                    </ol>
+                </section>
+            }
+
+            @if (insight.Replacements.Count > 0)
+            {
+                <section class="panel">
+                    <div class="panel-head"><h2>Free-agent options</h2><span class="muted">Available now</span></div>
+                    <div class="plist">
+                        @foreach (var fa in insight.Replacements.Select(Data.Player).OfType<Player>())
+                        {
+                            <PlayerRow P="@fa" ShowVerdict="false" />
+                        }
+                    </div>
+                </section>
+            }
+        }
+        <p class="updated">Value source: @p.Rank.ValueSource</p>
+    }
+</LoadState>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+    [Inject] IJSRuntime JS { get; set; } = default!;
+
+    Player? P => Data.Player(Id);
+
+    RenderFragment TradePlayer(string id) => __builder =>
+    {
+        var tp = Data.Player(id);
+        if (tp is null) { <span class="tp muted">Player @id</span> return; }
+        <a class="tp" href="player/@tp.Id">
+            <PosChip Pos="@tp.Position" />
+            <span class="tp-name">@Fmt.ShortName(tp.Name)</span>
+            <span class="tp-ppg num">@Fmt.Pts(tp.Stats.PointsPerGame)</span>
+        </a>
+    };
+
+    async Task Back() => await JS.InvokeVoidAsync("history.back");
+}

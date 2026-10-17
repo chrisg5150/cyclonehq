@@ -1,0 +1,18 @@
+@* A franchise's logo, or its initials on a colored disc when MFL has no logo. *@
+@{
+    var name = F?.Name ?? "?";
+    var initials = string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(w => char.IsLetterOrDigit(w[0])).Take(2).Select(w => char.ToUpperInvariant(w[0])));
+    var hue = Math.Abs(name.Aggregate(17, (h, c) => h * 31 + c)) % 360;
+}
+<span class="flogo @(Large ? "lg" : "")" style="--hue:@hue">
+    <span>@initials</span>
+    @if (!string.IsNullOrEmpty(F?.LogoUrl))
+    {
+        <img src="@F.LogoUrl" alt="" loading="lazy" onerror="this.remove()" />
+    }
+</span>
+
+@code {
+    [Parameter] public Franchise? F { get; set; }
+    [Parameter] public bool Large { get; set; }
+}

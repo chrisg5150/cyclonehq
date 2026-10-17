@@ -1,0 +1,14 @@
+@if (Flags is { Count: > 0 })
+{
+    <span class="flags">
+        @foreach (var f in Flags.OrderBy(Fmt.FlagWeight).Take(Max))
+        {
+            <span class="flag flag-@f">@Fmt.FlagLabel(f)</span>
+        }
+    </span>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<string>? Flags { get; set; }
+    [Parameter] public int Max { get; set; } = 3;
+}

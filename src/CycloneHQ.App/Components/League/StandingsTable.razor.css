@@ -1,0 +1,18 @@
+.st { padding: 8px 6px 10px; }
+.st-head, .st-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) 48px 54px 54px; align-items: center; gap: 6px; padding: 8px 8px; }
+.st-head { color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.st-head span:nth-child(n+3), .st-row > span:nth-child(n+3) { text-align: right; }
+.st-row { border-radius: 12px; font-size: 13px; }
+.st-row + .st-row { border-top: 1px solid var(--line); }
+.st-row.me { background: color-mix(in srgb, var(--gold) 13%, transparent); border-top-color: transparent; box-shadow: inset 3px 0 0 var(--gold); }
+.st-row.me + .st-row { border-top-color: transparent; }
+.st-row.cut { border-bottom: 1px dashed var(--line-2); border-radius: 12px 12px 0 0; }
+.st-rank { color: var(--muted); font-weight: 700; text-align: center; }
+.st-team { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.st-name { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.st-name b { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-row.me .st-name b { color: var(--gold); }
+.st-bar { height: 3px; border-radius: 99px; background: var(--panel-2); overflow: hidden; }
+.st-bar span { display: block; height: 100%; background: var(--brand-grad); border-radius: 99px; }
+.st-rec { font-weight: 800; }
+.st-note { font-size: 11px; text-align: center; margin: 10px 0 0; }

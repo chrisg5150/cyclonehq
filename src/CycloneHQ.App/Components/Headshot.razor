@@ -1,0 +1,15 @@
+@{ var initials = string.Concat(Name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(s => s[0])); }
+<span class="headshot @(Large ? "headshot-lg" : "")" style="--pc:var(--pos-@Pos.ToLowerInvariant())">
+    <span class="initials">@initials</span>
+    @if (!string.IsNullOrEmpty(Url))
+    {
+        <img src="@Url" alt="" loading="lazy" onerror="this.remove()" />
+    }
+</span>
+
+@code {
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public string Pos { get; set; } = "";
+    [Parameter] public string? Url { get; set; }
+    [Parameter] public bool Large { get; set; }
+}

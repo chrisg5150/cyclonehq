@@ -1,0 +1,64 @@
+@* Actual points as bars, expected points as a line: shows when a player is beating or lagging his usage. *@
+@if (Weekly is { Count: > 0 })
+{
+    var pts = Weekly.OrderBy(w => w.Week).ToList();
+    var hasExp = pts.Any(w => w.Expected is not null);
+    var top = Math.Max(5, pts.Max(w => Math.Max(w.Points, w.Expected ?? 0)));
+    var step = top > 30 ? 10 : 5;
+    var yMax = Math.Ceiling(top / step) * step;
+    const double W = 340, H = 168, L = 26, R = 6, T = 14, B = 22;
+    var slot = (W - L - R) / pts.Count;
+    var bw = Math.Min(26, slot * 0.62);
+    double Cx(int i) => L + slot * i + slot / 2;
+    double Y(double v) => T + (1 - Math.Max(0, v) / yMax) * (H - T - B);
+    var expLine = string.Join(" ", pts.Select((w, i) => (w, i)).Where(t => t.w.Expected is not null)
+        .Select(t => $"{Cx(t.i):0.#},{Y(t.w.Expected!.Value):0.#}"));
+    <figure class="chart">
+        <svg viewBox="0 0 @W @H" class="weekly" role="img" aria-label="Weekly actual vs expected points">
+            @for (var v = 0.0; v <= yMax; v += step)
+            {
+                <g>
+                    <line x1="@L" x2="@(W - R)" y1="@Y(v).ToString("0.#")" y2="@Y(v).ToString("0.#")" class="grid" />
+                    <text x="@(L - 6)" y="@((Y(v) + 3.5).ToString("0.#"))" class="axis" text-anchor="end">@v</text>
+                </g>
+            }
+            @for (var i = 0; i < pts.Count; i++)
+            {
+                var w = pts[i];
+                var y = Y(w.Points);
+                var beat = w.Expected is null || w.Points >= w.Expected;
+                <g>
+                <rect x="@((Cx(i) - bw / 2).ToString("0.#"))" y="@y.ToString("0.#")" width="@bw.ToString("0.#")"
+                      height="@Math.Max(1, Y(0) - y).ToString("0.#")" rx="3" class="bar @(beat ? "" : "bar-miss")" style="--i:@i" />
+                <text x="@Cx(i).ToString("0.#")" y="@((y - 4).ToString("0.#"))" class="bar-val" text-anchor="middle"
+                      visibility="@(pts.Count <= 12 ? "visible" : "hidden")">@w.Points.ToString("0")</text>
+                <text x="@Cx(i).ToString("0.#")" y="@(H - 6)" class="axis" text-anchor="middle">@w.Week</text>
+                </g>
+            }
+            @if (hasExp)
+            {
+                <polyline points="@expLine" class="exp-line" />
+                @for (var i = 0; i < pts.Count; i++)
+                {
+                    if (pts[i].Expected is { } e)
+                    {
+                        <circle cx="@Cx(i).ToString("0.#")" cy="@Y(e).ToString("0.#")" r="3" class="exp-dot" />
+                    }
+                }
+            }
+        </svg>
+        <figcaption class="legend">
+            <span><i class="sw sw-bar"></i>Actual</span>
+            @if (hasExp) { <span><i class="sw sw-exp"></i>Expected</span> <span><i class="sw sw-miss"></i>Below expected</span> }
+
+        </figcaption>
+    </figure>
+}
+else
+{
+    <p class="muted">No games played yet.</p>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<WeeklyPoints>? Weekly { get; set; }
+}

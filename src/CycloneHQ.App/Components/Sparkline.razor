@@ -1,0 +1,26 @@
+@* Weekly fantasy points as a tiny line; the last week gets a dot. *@
+@if (Weekly is { Count: > 1 })
+{
+    var pts = Weekly.OrderBy(w => w.Week).ToList();
+    var max = Math.Max(1, pts.Max(w => w.Points));
+    double X(int i) => 2 + i * (Width - 4) / (double)(pts.Count - 1);
+    double Y(double v) => Height - 3 - Math.Max(0, v) / max * (Height - 6);
+    var line = string.Join(" ", pts.Select((w, i) => $"{X(i):0.#},{Y(w.Points):0.#}"));
+    var area = $"2,{Height} {line} {X(pts.Count - 1):0.#},{Height}";
+    <svg class="spark" viewBox="0 0 @Width @Height" width="@Width" height="@Height" role="img"
+         aria-label="Weekly points: @string.Join(", ", pts.Select(w => Fmt.Pts(w.Points)))">
+        <polygon points="@area" class="spark-area" />
+        <polyline points="@line" class="spark-line" />
+        <circle cx="@X(pts.Count - 1).ToString("0.#")" cy="@Y(pts[^1].Points).ToString("0.#")" r="2.6" class="spark-dot" />
+    </svg>
+}
+else
+{
+    <span class="spark spark-empty" style="width:@(Width)px"></span>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<WeeklyPoints>? Weekly { get; set; }
+    [Parameter] public int Width { get; set; } = 76;
+    [Parameter] public int Height { get; set; } = 26;
+}

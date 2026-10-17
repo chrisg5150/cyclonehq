@@ -1,0 +1,32 @@
+@* Type a few letters, tap the right player. *@
+<div class="spick">
+    <input @bind="q" @bind:event="oninput" @bind:after="Search" placeholder="Search players…" aria-label="Search players" />
+    @if (hits.Count > 0)
+    {
+        <div class="spick-hits">
+            @foreach (var h in hits)
+            {
+                <button class="sug" @onclick="() => Choose(h)">
+                    <PosChip Pos="@ManualReport.Pos(h.Position)" /> @h.Name <small>@NflTeams.Code(h.NflTeam)</small>
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public RosterMatcher Matcher { get; set; } = default!;
+    [Parameter] public EventCallback<DirectoryEntry> OnPick { get; set; }
+
+    string q = "";
+    IReadOnlyList<DirectoryEntry> hits = [];
+
+    void Search() => hits = q.Trim().Length < 2 ? [] : Matcher.Suggest(q, take: 5);
+
+    async Task Choose(DirectoryEntry e)
+    {
+        q = "";
+        hits = [];
+        await OnPick.InvokeAsync(e);
+    }
+}

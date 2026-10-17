@@ -1,0 +1,133 @@
+@page "/leagues"
+@implements IDisposable
+@inject AppState State
+@inject LeagueExtras Extras
+@inject ManualLeagues Store
+@inject NavigationManager Nav
+
+<PageTitle>Leagues · CycloneHQ</PageTitle>
+
+<section class="hero hero-compact">
+    <div class="kicker">Switch league</div>
+    <h1 class="display">Your leagues</h1>
+</section>
+
+<section class="lg-list">
+    @if (index?.Leagues is { Count: > 0 } synced)
+    {
+        @foreach (var l in synced)
+        {
+            var on = State.CurrentLeagueKey == l.Key;
+            <button class="lg-card @(on ? "on" : "")" @onclick="() => Select(l.Key, true)" aria-pressed="@on">
+                <span class="lg-badge synced">@l.Platform.ToUpperInvariant()</span>
+                <span class="lg-main">
+                    <b>@l.Name</b>
+                    <small>@l.MyTeamName · @l.Season · synced</small>
+                </span>
+                <span class="lg-check" aria-hidden="true">@(on ? "✓" : "")</span>
+            </button>
+        }
+    }
+    else if (loading)
+    {
+        <div class="skeleton"></div>
+    }
+    else if (!State.CurrentLeagueKey.StartsWith("manual-"))
+    {
+        <button class="lg-card on" aria-pressed="true">
+            <span class="lg-badge synced">MFL</span>
+            <span class="lg-main"><b>Universal League</b><small>Waiting for the first sync</small></span>
+            <span class="lg-check" aria-hidden="true">✓</span>
+        </button>
+    }
+
+    @foreach (var l in manual)
+    {
+        var on = State.CurrentLeagueKey == l.Key;
+        <div class="lg-card @(on ? "on" : "")" role="button" tabindex="0" @onclick="() => Select(l.Key, false)" aria-pressed="@on">
+            <span class="lg-badge pasted">@l.Platform.ToUpperInvariant()</span>
+            <span class="lg-main">
+                <b>@l.Name</b>
+                <small>@l.Roster.Count(s => s.PlayerId is not null) players · pasted @l.AddedUtc.ToLocalTime().ToString("MMM d")</small>
+            </span>
+            @if (confirmDelete == l.Key)
+            {
+                <span class="lg-confirm">
+                    <button class="btn btn-danger sm" @onclick:stopPropagation="true" @onclick="() => DeleteAsync(l)">Remove</button>
+                    <button class="btn btn-ghost sm" @onclick:stopPropagation="true" @onclick="() => confirmDelete = null">Keep</button>
+                </span>
+            }
+            else
+            {
+                <button class="lg-del" @onclick:stopPropagation="true" @onclick="() => confirmDelete = l.Key" aria-label="Remove @l.Name">🗑</button>
+            }
+            <span class="lg-check" aria-hidden="true">@(on ? "✓" : "")</span>
+        </div>
+    }
+</section>
+
+@if (adding)
+{
+    <AddLeague OnSaved="OnSaved" OnCancel="() => adding = false" />
+}
+else
+{
+    <button class="add-cta" @onclick="() => adding = true">
+        <span class="plus">+</span>
+        <span><b>Add a league</b><small>Paste a roster from ESPN, Yahoo, Sleeper… or upload a CSV</small></span>
+    </button>
+}
+
+@if (State.CurrentLeagueKey.StartsWith("manual-") && !adding)
+{
+    <ManualLeagueView LeagueKey="@State.CurrentLeagueKey" />
+}
+
+@code {
+    LeagueIndex? index;
+    IReadOnlyList<ManualLeague> manual = [];
+    bool loading = true;
+    bool adding;
+    string? confirmDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.Changed += OnChanged;
+        Store.Changed += OnChanged;
+        manual = await Store.AllAsync();
+        index = await Extras.IndexAsync();
+        loading = false;
+    }
+
+    void OnChanged() => InvokeAsync(async () =>
+    {
+        manual = await Store.AllAsync();
+        StateHasChanged();
+    });
+
+    void Select(string key, bool synced)
+    {
+        State.SelectLeague(key);
+        if (synced) Nav.NavigateTo("");
+    }
+
+    void OnSaved(ManualLeague league)
+    {
+        adding = false;
+        State.SelectLeague(league.Key);
+    }
+
+    async Task DeleteAsync(ManualLeague l)
+    {
+        confirmDelete = null;
+        if (State.CurrentLeagueKey == l.Key)
+            State.SelectLeague(index?.Leagues.FirstOrDefault()?.Key ?? "mfl-24623");
+        await Store.DeleteAsync(l.Key);
+    }
+
+    public void Dispose()
+    {
+        State.Changed -= OnChanged;
+        Store.Changed -= OnChanged;
+    }
+}

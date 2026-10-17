@@ -1,0 +1,125 @@
+@* A pasted league: George's roster with position rank, trade value and PPG, plus his weakest positions
+   against simple league-average benchmarks built from directory.json. *@
+@inject ManualLeagues Store
+@inject LeagueExtras Extras
+
+@if (loading)
+{
+    <div class="skeleton tall"></div>
+    <div class="skeleton"></div>
+}
+else if (league is null)
+{
+    <section class="panel empty">
+        <h2>League not found</h2>
+        <p>This pasted league isn't saved in this browser. Add it again from the Leagues screen.</p>
+        <a class="btn" href="leagues">Leagues</a>
+    </section>
+}
+else if (directory is null)
+{
+    <section class="panel empty">
+        <h2>Player data isn't ready</h2>
+        <p>The player directory hasn't been synced yet. Try again in a few minutes.</p>
+    </section>
+}
+else
+{
+    var (rows, allBench) = report;
+    // Positions with no scoring data in the directory (often DEF) can't be judged, so leave them out.
+    var bench = allBench.Where(b => b.LeagueAvgPpg > 0).ToList();
+    var weakest = bench.OrderBy(b => b.GapPct).Take(3).Where(b => b.GapPct < 0).ToList();
+    var unmatched = league.Roster.Count(s => s.PlayerId is null);
+    <section class="hero hero-compact mhero">
+        <div class="kicker">@league.Platform · pasted roster · @league.Teams teams</div>
+        <h1 class="display">@league.Name</h1>
+        <div class="hero-stats">
+            <div><b class="num">@rows.Count</b><small>Players</small></div>
+            <div><b class="num">@rows.Where(r => r.IsStarter).Sum(r => r.Entry.PointsPerGame).ToString("0.0")</b><small>Starter PPG</small></div>
+            <div><b class="num">@rows.Sum(r => r.Entry.TradeValue).ToString("0")</b><small>Total value</small></div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="panel-head">
+            <h2>Where you're thin</h2>
+            <span class="muted">vs. a typical @league.Teams-team starter</span>
+        </div>
+        <div class="bench">
+            @foreach (var b in bench.OrderBy(b => b.GapPct))
+            {
+                var pct = Math.Clamp(Math.Abs(b.GapPct) * 100, 0, 50);
+                var good = b.Gap >= 0;
+                var weak = weakest.Contains(b);
+                <div class="b-row @(weak ? "weak" : "")">
+                    <PosChip Pos="@b.Position" />
+                    <div class="b-track">
+                        <span class="b-mid"></span>
+                        <span class="b-bar @(good ? "up" : "down")" style="@(good ? $"left:50%;width:{pct:0.#}%" : $"right:50%;width:{pct:0.#}%")"></span>
+                    </div>
+                    <span class="b-val num @(good ? "up" : "down")">@Fmt.Signed(b.GapPct * 100, "0")%</span>
+                    <span class="b-detail num">@Fmt.Pts(b.MyStarterPpg) <small>vs @Fmt.Pts(b.LeagueAvgPpg)</small></span>
+                </div>
+            }
+        </div>
+        @if (weakest.Count > 0)
+        {
+            <p class="b-note">Biggest needs: <b>@string.Join(", ", weakest.Select(w => w.Position))</b>. Look for upgrades there first.</p>
+        }
+        else
+        {
+            <p class="b-note">Every starting spot beats a typical starter. Nice roster.</p>
+        }
+    </section>
+
+    <section class="panel">
+        <div class="panel-head">
+            <h2>Roster</h2>
+            <span class="muted">Rank · value · PPG</span>
+        </div>
+        <div class="mroster">
+            @foreach (var r in rows)
+            {
+                var e = r.Entry;
+                var pos = ManualReport.Pos(e.Position);
+                <a class="mr-row @(r.IsStarter ? "" : "benchp")" href="player/@e.Id">
+                    <Headshot Name="@e.Name" Pos="@pos" />
+                    <span class="mr-main">
+                        <b>@e.Name</b>
+                        <span class="mr-sub"><PosChip Pos="@pos" /><TeamChip Team="@e.NflTeam" />@(r.IsStarter ? "" : " Bench")</span>
+                    </span>
+                    <span class="mr-stat"><b class="num">@(r.PositionRank > 0 ? $"{pos}{r.PositionRank}" : "—")</b><small>Rank</small></span>
+                    <span class="mr-stat"><b class="num">@e.TradeValue.ToString("0")</b><small>Value</small></span>
+                    <span class="mr-stat"><b class="num">@Fmt.Pts(e.PointsPerGame)</b><small>PPG</small></span>
+                </a>
+            }
+        </div>
+        @if (unmatched > 0)
+        {
+            <p class="muted mr-note">@unmatched pasted name@(unmatched == 1 ? "" : "s") didn't match a player and @(unmatched == 1 ? "isn't" : "aren't") counted.</p>
+        }
+        <p class="muted mr-note">Trade ideas need a synced league; pasted leagues get roster health only.</p>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public string LeagueKey { get; set; } = "";
+
+    bool loading = true;
+    string? loadedKey;
+    ManualLeague? league;
+    PlayerDirectory? directory;
+    (IReadOnlyList<ManualPlayerRow>, IReadOnlyList<PositionBenchmark>) report;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedKey == LeagueKey) return;
+        loadedKey = LeagueKey;
+        loading = true;
+        league = await Store.GetAsync(LeagueKey);
+        directory = await Extras.DirectoryAsync();
+        if (league is not null && directory is not null)
+            report = ManualReport.Build(league, directory);
+        loading = false;
+    }
+}

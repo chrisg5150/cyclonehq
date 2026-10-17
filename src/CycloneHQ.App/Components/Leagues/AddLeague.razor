@@ -1,0 +1,211 @@
+@* "Add a league": paste roster text from any site or upload a CSV, match the names to directory.json,
+   fix the misses, then save to localStorage. *@
+@inject ManualLeagues Store
+@inject LeagueExtras Extras
+
+<section class="panel add">
+    <div class="panel-head">
+        <h2>@(step == Step.Input ? "Add a league" : "Check the matches")</h2>
+        <button class="x" @onclick="OnCancel" aria-label="Close">✕</button>
+    </div>
+
+    @if (step == Step.Input)
+    {
+        <div class="add-fields">
+            <label class="fld">
+                <span>League name</span>
+                <input @bind="name" @bind:event="oninput" placeholder="ESPN work league" />
+            </label>
+            <div class="fld-row">
+                <label class="fld">
+                    <span>Site</span>
+                    <select @bind="platform">
+                        @foreach (var p in Platforms) { <option value="@p">@p</option> }
+                    </select>
+                </label>
+                <label class="fld">
+                    <span>Teams</span>
+                    <input type="number" min="4" max="32" @bind="teams" />
+                </label>
+            </div>
+            <label class="fld">
+                <span>Paste your roster</span>
+                <textarea rows="8" @bind="text" @bind:event="oninput"
+                          placeholder="Open your team page on ESPN, Yahoo or Sleeper, select the roster, copy, and paste it here. Messy is fine."></textarea>
+            </label>
+            <div class="add-or">
+                <span>or</span>
+                <label class="btn btn-ghost file-btn">
+                    Upload CSV
+                    <InputFile OnChange="OnFile" accept=".csv,.txt,text/csv,text/plain" />
+                </label>
+                @if (fileName is not null) { <small class="muted">@fileName</small> }
+            </div>
+            @if (error is not null) { <p class="add-err">@error</p> }
+            <button class="btn wide" disabled="@(busy || string.IsNullOrWhiteSpace(text))" @onclick="MatchAsync">
+                @(busy ? "Matching…" : "Match players")
+            </button>
+        </div>
+    }
+    else
+    {
+        var matched = results.Where(r => r.Entry is not null).ToList();
+        var misses = results.Where(r => r.Entry is null && !skipped.Contains(r.RawName)).ToList();
+        var junk = results.Where(r => r.Entry is null && skipped.Contains(r.RawName)).ToList();
+
+        <div class="add-summary" role="status">
+            <span class="ok"><b class="num">@matched.Count</b> matched</span>
+            <span class="@(misses.Count > 0 ? "warn" : "muted")"><b class="num">@misses.Count</b> not matched</span>
+            @if (junk.Count > 0) { <span class="muted"><b class="num">@junk.Count</b> skipped</span> }
+        </div>
+
+        @if (misses.Count > 0)
+        {
+            <h3 class="add-h">Not matched <small class="muted">pick the right player or skip</small></h3>
+            @foreach (var r in misses)
+            {
+                <div class="miss">
+                    <div class="miss-top">
+                        <span class="miss-raw">“@r.RawName”</span>
+                        <button class="link" @onclick="() => Skip(r)">Skip</button>
+                    </div>
+                    @if (r.Suggestions.Count == 0) { <div class="miss-none muted">No close matches. Search below.</div> }
+                    <div class="miss-sugs">
+                        @foreach (var s in r.Suggestions.Take(4))
+                        {
+                            <button class="sug" @onclick="() => Pick(r, s)">
+                                <PosChip Pos="@ManualReport.Pos(s.Position)" /> @s.Name <small>@NflTeams.Code(s.NflTeam)</small>
+                            </button>
+                        }
+                    </div>
+                    <SearchPick Matcher="matcher!" OnPick="e => Pick(r, e)" />
+                </div>
+            }
+        }
+
+        <h3 class="add-h">Your roster <small class="muted">tap × to remove</small></h3>
+        <div class="matched">
+            @foreach (var r in matched.OrderBy(r => Array.IndexOf(Positions.All, ManualReport.Pos(r.Entry!.Position)) is var i && i >= 0 ? i : 9))
+            {
+                var e = r.Entry!;
+                <div class="m-row @(r.Quality == MatchQuality.Loose ? "loose" : "")">
+                    <PosChip Pos="@ManualReport.Pos(e.Position)" />
+                    <span class="m-name">
+                        <b>@e.Name</b>
+                        @if (!string.Equals(RosterMatcher.Key(r.RawName), RosterMatcher.Key(e.Name), StringComparison.Ordinal))
+                        {
+                            <small class="muted">from “@r.RawName”</small>
+                        }
+                    </span>
+                    <TeamChip Team="@e.NflTeam" />
+                    <button class="x" @onclick="() => Remove(r)" aria-label="Remove @e.Name">×</button>
+                </div>
+            }
+        </div>
+
+        <div class="add-more">
+            <span class="muted">Missing someone?</span>
+            <SearchPick Matcher="matcher!" OnPick="AddExtra" />
+        </div>
+
+        @if (junk.Count > 0)
+        {
+            <details class="junk">
+                <summary>@junk.Count skipped</summary>
+                <ul>@foreach (var j in junk) { <li>@j.RawName <button class="link" @onclick="() => skipped.Remove(j.RawName)">Undo</button></li> }</ul>
+            </details>
+        }
+
+        <div class="add-actions">
+            <button class="btn btn-ghost" @onclick="() => step = Step.Input">Back</button>
+            <button class="btn" disabled="@(matched.Count == 0 || busy)" @onclick="SaveAsync">Save league (@matched.Count)</button>
+        </div>
+    }
+</section>
+
+@code {
+    enum Step { Input, Review }
+    static readonly string[] Platforms = ["ESPN", "Yahoo", "Sleeper", "NFL.com", "CBS", "Other"];
+
+    [Parameter] public EventCallback<ManualLeague> OnSaved { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    Step step = Step.Input;
+    string name = "ESPN League";
+    string platform = "ESPN";
+    int teams = 12;
+    string text = "";
+    string? fileName;
+    string? error;
+    bool busy;
+    RosterMatcher? matcher;
+    List<RosterMatch> results = [];
+    readonly HashSet<string> skipped = [];
+
+    async Task OnFile(InputFileChangeEventArgs e)
+    {
+        error = null;
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(maxAllowedSize: 2_000_000));
+            text = await reader.ReadToEndAsync();
+            fileName = e.File.Name;
+            if (name == "ESPN League") name = Path.GetFileNameWithoutExtension(e.File.Name);
+        }
+        catch (Exception ex)
+        {
+            error = $"Couldn't read that file ({ex.Message}).";
+        }
+    }
+
+    async Task MatchAsync()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var directory = await Extras.DirectoryAsync();
+            if (directory is null) { error = "The player directory hasn't synced yet. Try again in a few minutes."; return; }
+            matcher ??= new RosterMatcher(directory);
+            await Task.Yield();
+            results = matcher.MatchText(text).ToList();
+            skipped.Clear();
+            if (results.Count == 0) { error = "No player names found. Try copying just the roster table."; return; }
+            step = Step.Review;
+        }
+        finally { busy = false; }
+    }
+
+    void Pick(RosterMatch r, DirectoryEntry e)
+    {
+        var i = results.IndexOf(r);
+        if (i < 0) return;
+        if (results.Any(x => x.Entry?.Id == e.Id)) { results.RemoveAt(i); return; }
+        results[i] = r with { Entry = e, Quality = MatchQuality.Exact };
+    }
+
+    void Skip(RosterMatch r) => skipped.Add(r.RawName);
+
+    void Remove(RosterMatch r) => results.Remove(r);
+
+    void AddExtra(DirectoryEntry e)
+    {
+        if (results.Any(x => x.Entry?.Id == e.Id)) return;
+        results.Add(new RosterMatch(e.Name, null, null, e, MatchQuality.Exact));
+    }
+
+    async Task SaveAsync()
+    {
+        busy = true;
+        try
+        {
+            var leagueName = string.IsNullOrWhiteSpace(name) ? $"{platform} League" : name.Trim();
+            var key = await Store.UniqueKeyAsync(leagueName);
+            var roster = results.Where(r => r.Entry is not null)
+                .Select(r => new ManualRosterSpot(r.RawName, r.Entry!.Id)).ToList();
+            var league = await Store.SaveAsync(new ManualLeague(key, leagueName, platform, Math.Clamp(teams, 4, 32), DateTimeOffset.UtcNow, roster));
+            await OnSaved.InvokeAsync(league);
+        }
+        finally { busy = false; }
+    }
+}

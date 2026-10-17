@@ -1,0 +1,72 @@
+@* Recent adds, drops and trades from transactions.json. *@
+@if (Loading)
+{
+    <div class="skeleton"></div>
+    <div class="skeleton"></div>
+}
+else if (Log is not { Items.Count: > 0 })
+{
+    <section class="panel"><p class="muted">No recent transactions.</p></section>
+}
+else
+{
+    <section class="panel tx">
+        @foreach (var t in Log.Items.OrderByDescending(t => t.When).Take(30))
+        {
+            var f = Data.Franchise(t.FranchiseId);
+            var (icon, label, kind) = Describe(t.Type);
+            <article class="tx-item @(t.FranchiseId == Data.MyFranchiseId ? "me" : "")">
+                <span class="tx-icon @kind" aria-hidden="true">@icon</span>
+                <div class="tx-body">
+                    <div class="tx-top">
+                        <b>@(f?.Name ?? (string.IsNullOrEmpty(t.FranchiseId) ? "League" : t.FranchiseId))</b>
+                        <span class="tx-type">@label</span>
+                        <span class="tx-when muted">@Fmt.Ago(t.When)</span>
+                    </div>
+                    @if (t.Added.Count > 0 || t.Dropped.Count > 0)
+                    {
+                        <div class="tx-players">
+                            @foreach (var id in t.Added) { @PlayerLink(id, true) }
+                            @foreach (var id in t.Dropped) { @PlayerLink(id, false) }
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(t.Description))
+                    {
+                        <div class="tx-desc muted">@t.Description</div>
+                    }
+                </div>
+            </article>
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public LeagueData Data { get; set; } = default!;
+    [Parameter] public TransactionLog? Log { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public IReadOnlyDictionary<string, DirectoryEntry>? Directory { get; set; }
+
+    static (string Icon, string Label, string Kind) Describe(string type)
+    {
+        var t = type.ToUpperInvariant();
+        if (t.Contains("TRADE")) return ("⇄", "Trade", "trade");
+        if (t.Contains("WAIVER") || t.Contains("BBID")) return ("+", "Waiver claim", "add");
+        if (t.Contains("FREE_AGENT") || t.Contains("FREE AGENT") || t == "FA" || t.Contains("ADD")) return ("+", "Free agent", "add");
+        if (t.Contains("DROP")) return ("−", "Drop", "drop");
+        if (t.Contains("IR")) return ("✚", "Injured reserve", "ir");
+        var pretty = System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(type.Replace('_', ' ').ToLowerInvariant());
+        return ("•", pretty, "other");
+    }
+
+    RenderFragment PlayerLink(string id, bool added) => __builder =>
+    {
+        var p = Data.Player(id);
+        var d = p is null && Directory is not null && Directory.TryGetValue(id, out var e) ? e : null;
+        <a class="tx-player @(added ? "add" : "drop")" href="player/@id">
+            <span class="tx-sign">@(added ? "+" : "−")</span>
+            @if (p is not null) { <PosChip Pos="@p.Position" /><span>@p.Name</span> <small class="muted">@NflTeams.Code(p.NflTeam)</small> }
+            else if (d is not null) { <PosChip Pos="@ManualReport.Pos(d.Position)" /><span>@d.Name</span> <small class="muted">@NflTeams.Code(d.NflTeam)</small> }
+            else { <span>Player @id</span> }
+        </a>
+    };
+}

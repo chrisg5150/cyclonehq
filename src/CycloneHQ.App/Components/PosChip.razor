@@ -1,0 +1,6 @@
+<span class="pos pos-@Pos.ToLowerInvariant() @(Large ? "pos-lg" : "")">@Pos</span>
+
+@code {
+    [Parameter, EditorRequired] public string Pos { get; set; } = "";
+    [Parameter] public bool Large { get; set; }
+}

@@ -1,0 +1,81 @@
+﻿@page "/"
+@inherits DataPage
+
+<PageTitle>CycloneHQ</PageTitle>
+
+<LoadState>
+    @{
+        var me = Data.MyFranchise;
+        var teams = Data.League!.Franchises.Count;
+        var flagged = Data.MyRoster.Where(p => p.Flags.Count > 0)
+            .OrderBy(p => p.Flags.Min(Fmt.FlagWeight)).ThenByDescending(p => p.Rank.TradeValue).ToList();
+    }
+    <section class="hero">
+        <div class="kicker">Week @Data.League.CurrentWeek · Command center</div>
+        <h1 class="display">@(me?.Name ?? "Your team")</h1>
+        @if (Data.Analysis?.Headline is { Length: > 0 } headline)
+        {
+            <p class="headline">@headline</p>
+        }
+        @if (me is not null)
+        {
+            <div class="hero-stats">
+                <div><b class="num">@me.Wins-@me.Losses@(me.Ties > 0 ? $"-{me.Ties}" : "")</b><small>Record</small></div>
+                <div><b class="num">@Fmt.Ordinal(me.StandingRank)</b><small>of @teams</small></div>
+                <div><b class="num">@me.PointsFor.ToString("0")</b><small>Points for</small></div>
+                @if (Data.MyProfile is { } prof)
+                {
+                    <div><b class="num">@Fmt.Pts(prof.ProjectedStarterPoints)</b><small>Proj. lineup</small></div>
+                }
+            </div>
+        }
+    </section>
+
+    <MatchupCard />
+
+    @if (Data.MyProfile is { } profile)
+    {
+        <section class="panel">
+            <div class="panel-head">
+                <h2>Position strength</h2>
+                <span class="muted">Starters vs. league median</span>
+            </div>
+            <StrengthChart Positions="@profile.Positions" Teams="@teams" />
+            @if (Data.Analysis?.Needs is { Count: > 0 } needs)
+            {
+                <ul class="needs">
+                    @foreach (var n in needs.OrderBy(n => n.GapVsMedian))
+                    {
+                        <li><PosChip Pos="@n.Position" /><span>@n.Note</span></li>
+                    }
+                </ul>
+            }
+        </section>
+    }
+
+    <section class="panel">
+        <div class="panel-head">
+            <h2>Flagged players</h2>
+            <span class="count num">@flagged.Count</span>
+        </div>
+        @if (flagged.Count == 0)
+        {
+            <p class="muted">No red flags on your roster right now.</p>
+        }
+        else
+        {
+            <div class="plist">
+                @foreach (var p in flagged)
+                {
+                    <PlayerRow P="@p" ShowSpark="false" />
+                    @if (Data.Insight(p.Id) is { } ins)
+                    {
+                        <p class="prow-why">@ins.Summary</p>
+                    }
+                }
+            </div>
+        }
+    </section>
+
+    <p class="updated">Data synced @Fmt.Ago(Data.League.UpdatedUtc)</p>
+</LoadState>

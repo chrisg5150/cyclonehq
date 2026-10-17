@@ -1,0 +1,67 @@
+# Sync league data, publish the Blazor app, and deploy it to GitHub Pages.
+name: Deploy CycloneHQ
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # All times UTC. GitHub may start scheduled runs a few minutes late.
+    # Every 10 minutes during NFL game windows (US Eastern, covers both EDT and EST):
+    - cron: "*/10 0-4 * * 5"   # Thursday night game (Thu 8:15pm ET = Fri 00:15-01:15 UTC)
+    - cron: "*/10 13-23 * * 0" # Sunday: London morning games through Sunday night kickoff
+    - cron: "*/10 0-4 * * 1"   # Sunday night game finish (Mon UTC)
+    - cron: "*/10 0-4 * * 2"   # Monday night game (Tue UTC)
+    # Every 3 hours the rest of the week (waivers, trades, news).
+    - cron: "0 */3 * * *"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a scheduled run queues behind a running one instead of cancelling it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Sync league data
+        run: dotnet run --project src/CycloneHQ.Sync -c Release -- --out src/CycloneHQ.App/wwwroot/data
+
+      - name: Publish app
+        run: dotnet publish src/CycloneHQ.App -c Release -o publish
+
+      - name: Set base path for GitHub Pages
+        shell: pwsh
+        run: |
+          # A <user>.github.io repo is served from the root; any other repo from /<repo-name>/.
+          $repo = "${{ github.event.repository.name }}"
+          $base = if ($repo -like "*.github.io") { "/" } else { "/$repo/" }
+          ./scripts/set-base-path.ps1 -Root publish/wwwroot -BasePath $base
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: publish/wwwroot
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

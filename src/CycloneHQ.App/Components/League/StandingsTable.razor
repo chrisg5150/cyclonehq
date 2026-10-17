@@ -1,0 +1,34 @@
+@* Standings: record, points for and against, with a points-for bar so the gaps read at a glance. *@
+@{
+    var teams = Data.League!.Franchises.OrderBy(f => f.StandingRank).ThenByDescending(f => f.Wins).ThenByDescending(f => f.PointsFor).ToList();
+    var maxPf = Math.Max(1, teams.Max(f => f.PointsFor));
+    var playoffLine = Math.Min(6, teams.Count / 2);
+}
+<section class="panel st">
+    <div class="st-head">
+        <span>#</span><span>Team</span><span>W-L</span><span>PF</span><span>PA</span>
+    </div>
+    @for (var i = 0; i < teams.Count; i++)
+    {
+        var f = teams[i];
+        var me = f.Id == Data.MyFranchiseId;
+        <div class="st-row @(me ? "me" : "") @(i == playoffLine - 1 ? "cut" : "")">
+            <span class="st-rank num">@(i + 1)</span>
+            <span class="st-team">
+                <Logo F="f" />
+                <span class="st-name">
+                    <b>@f.Name</b>
+                    <span class="st-bar"><span style="width:@((f.PointsFor / maxPf * 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%"></span></span>
+                </span>
+            </span>
+            <span class="num st-rec">@f.Wins-@f.Losses@(f.Ties > 0 ? $"-{f.Ties}" : "")</span>
+            <span class="num">@f.PointsFor.ToString("0.0")</span>
+            <span class="num muted">@f.PointsAgainst.ToString("0.0")</span>
+        </div>
+    }
+    <p class="st-note muted">Dashed line: top @playoffLine · bar shows points for</p>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public LeagueData Data { get; set; } = default!;
+}
