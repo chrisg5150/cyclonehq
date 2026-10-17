@@ -11,7 +11,7 @@ Set-Location (Split-Path $PSScriptRoot -Parent)
 function Need([string]$cmd, [string]$hint) {
     if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) { throw "$cmd not found. $hint" }
 }
-#Need git    "Install from https://git-scm.com/downloads"
+Need git    "Install from https://git-scm.com/downloads"
 Need gh     "Install from https://cli.github.com (winget install GitHub.cli)"
 Need dotnet "Install the .NET 10 SDK from https://dotnet.microsoft.com/download"
 if (-not (dotnet --list-sdks | Select-String '^10\.')) { throw ".NET 10 SDK not found. Install it from https://dotnet.microsoft.com/download" }
